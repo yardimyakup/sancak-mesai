@@ -76,18 +76,15 @@
   <aside class="sidebar">
     <div class="sidebar-logo"><img src="unnamed (1).png" alt="Şirket Logosu"></div>
 
-    <div class="sidebar-user">
-      <div class="avatar" id="sidebarAvatar"></div>
-      <div>
-        <div class="uname" id="sidebarUserName"></div>
-        <div class="urole" id="sidebarUserRole"></div>
-      </div>
-    </div>
-
     <nav class="sidebar-nav" id="sidebarNav"></nav>
 
-    <div class="sidebar-footer">
-      <button class="logout-btn" id="logoutBtn">Çıkış Yap</button>
+    <div class="sidebar-footer" id="sidebarProfileBtn" style="cursor:pointer; padding:12px; border-top:1px solid var(--border); display:flex; align-items:center; gap:10px; transition:0.2s;">
+      <div class="avatar" id="sidebarAvatar" style="width:38px; height:38px; font-size:14px; flex-shrink:0;"></div>
+      <div class="user-details" style="flex:1; overflow:hidden;">
+        <div class="uname" id="sidebarUserName" style="font-size:13.5px; font-weight:700; color:var(--navy); white-space:nowrap; text-overflow:ellipsis; overflow:hidden;"></div>
+        <div class="urole" id="sidebarUserRole" style="font-size:11.5px; color:var(--text-soft); white-space:nowrap; text-overflow:ellipsis; overflow:hidden;"></div>
+      </div>
+      <div style="color:var(--text-soft); font-size:16px;">⚙️</div>
     </div>
   </aside>
 

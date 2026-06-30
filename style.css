@@ -603,21 +603,15 @@ table.modern-table{
   .sidebar-footer{
     grid-column: 2 / 3;
     grid-row: 1 / 2;
-    padding:16px 20px;
-    border-top:none;
+    padding:10px 16px;
+    border-top:none !important;
     display:flex;
     align-items:center;
+    justify-content: flex-end;
   }
-  .logout-btn{
-    padding:8px 14px;
-    font-size:12.5px;
-    width:auto;
-    border-radius: 20px;
-    background: var(--red-bg);
-  }
-  .logout-btn:hover { background: var(--red); color: var(--white); }
-
-  .sidebar-user{display:none;}
+  .sidebar-footer .user-details { display:none; }
+  .sidebar-footer .avatar { width:34px !important; height:34px !important; font-size:13px !important; }
+  .sidebar-footer div:last-child { display:none; }
   
   .sidebar-nav{
     grid-column: 1 / -1;

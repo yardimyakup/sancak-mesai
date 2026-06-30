@@ -143,10 +143,71 @@ function login(user){
 }
 
 function logout(){
+  if($("#profileModalOverlay")) $("#profileModalOverlay").remove();
   currentUser = null;
   $("#appScreen").classList.add("hidden");
   $("#authScreen").classList.remove("hidden");
   switchAuthTab("login");
+}
+
+function openProfileModal(){
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.id = "profileModalOverlay";
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:400px; text-align:center;">
+      <button class="modal-close" id="closeProfileModal">✕</button>
+      <div class="avatar" style="width:64px; height:64px; font-size:22px; margin:0 auto 16px;">${initials(currentUser)}</div>
+      <h3 style="margin-bottom:4px;">${fullName(currentUser)}</h3>
+      <p style="color:var(--text-soft); font-size:13px; margin:0 0 20px;">${ROLES[currentUser.role].label}</p>
+      
+      <form id="profileForm" style="text-align:left;">
+        <div class="form-group">
+          <label>Ad</label>
+          <input type="text" id="profAd" value="${currentUser.ad}" required>
+        </div>
+        <div class="form-group">
+          <label>Soyad</label>
+          <input type="text" id="profSoyad" value="${currentUser.soyad}" required>
+        </div>
+        <div class="form-group">
+          <label>Görev</label>
+          <input type="text" id="profGorev" value="${currentUser.gorev}" required>
+        </div>
+        <div class="form-group">
+          <label>Departman</label>
+          <input type="text" id="profDepartman" value="${currentUser.departman}">
+        </div>
+        <button type="submit" class="btn btn-primary btn-block" style="margin-top:10px;">Bilgileri Kaydet</button>
+      </form>
+      
+      <div style="margin-top:24px; padding-top:16px; border-top:1px dashed var(--border);">
+        <button type="button" class="btn btn-block" id="modalLogoutBtn" style="background:var(--red-bg); color:var(--red); font-weight:700; display:flex; justify-content:center; align-items:center; gap:8px; border:none; box-shadow:none;"><span style="font-size:16px;">🚪</span> Çıkış Yap</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  $("#closeProfileModal").addEventListener("click", ()=>overlay.remove());
+  overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
+  
+  $("#modalLogoutBtn").addEventListener("click", logout);
+  
+  $("#profileForm").addEventListener("submit", e=>{
+    e.preventDefault();
+    currentUser.ad = $("#profAd").value.trim();
+    currentUser.soyad = $("#profSoyad").value.trim();
+    currentUser.gorev = $("#profGorev").value.trim();
+    currentUser.departman = $("#profDepartman").value.trim() || "—";
+    
+    buildSidebar();
+    
+    const activeNav = $(".nav-item.active");
+    if(activeNav) renderSection(activeNav.dataset.key);
+    
+    toast("Profil bilgileriniz güncellendi.");
+    overlay.remove();
+  });
 }
 
 /* ---------------- SIDEBAR ---------------- */
@@ -160,11 +221,13 @@ const NAV_BY_ROLE = {
     {key:"sef-mesai", label:"Mesailerim", icon:"📅"}
   ],
   ik: [
-    {key:"ik-ozet", label:"Şirket Özeti", icon:"🗂️"}
+    {key:"ik-ozet", label:"Şirket Özeti", icon:"🗂️"},
+    {key:"ik-personel", label:"Personel Listesi", icon:"👥"}
   ],
   yonetici: [
     {key:"yon-ozet", label:"Mesai Özeti", icon:"🗂️"},
-    {key:"yon-kayit", label:"Sistem Kayıtları", icon:"🕒"}
+    {key:"yon-kayit", label:"Sistem Kayıtları", icon:"🕒"},
+    {key:"yon-personel", label:"Personel Listesi", icon:"👥"}
   ]
 };
 
@@ -205,6 +268,7 @@ function renderSection(key){
   else if(key==="ik-ozet") renderIkOzet(main);
   else if(key==="yon-ozet") renderYonOzet(main);
   else if(key==="yon-kayit") renderYonKayit(main);
+  else if(key==="ik-personel" || key==="yon-personel") renderPersonelListesi(main);
 }
 
 /* ---------------- ÇALIŞAN / ŞEF: MESAİLERİM ---------------- */
@@ -610,35 +674,72 @@ function renderIkOzet(main){
     <div class="main-header">
       <div>
         <h1>Günlük Şirket Özeti</h1>
-        <div class="sub">Tüm çalışanların mesai kayıtlarını görüntüleyin.</div>
+        <div class="sub">Tüm çalışanların mesai kayıtlarını günlük dosyalar halinde görüntüleyin.</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <input type="date" id="pdfDateIk" value="${todayIso}" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);outline:none;font-family:inherit;">
         <button class="btn btn-turq" id="btnIkPdf">📄 PDF İndir</button>
       </div>
     </div>
-    <div class="card">
-      <div class="table-wrap">
-        <table class="modern-table">
-          <thead>
-            <tr><th>İsim</th><th>Departman</th><th>Tarih</th><th>Mesai Saati</th><th>Durum</th></tr>
-          </thead>
-          <tbody id="ikTableBody"></tbody>
-        </table>
-      </div>
-    </div>
+    <div id="ikDailyFolders"></div>
   `;
-  const rows = entries.slice().sort((a,b)=>b.tarih.localeCompare(a.tarih)).map(e=>{
-    const u = userById(e.userId);
-    return `<tr>
-      <td>${fullName(u)}</td>
-      <td>${u.departman}</td>
-      <td>${fmtDate(e.tarih)}</td>
-      <td>${e.baslangic} - ${e.bitis}</td>
-      <td><span class="badge ${badgeClass(e.durum)}">${e.durum}</span></td>
-    </tr>`;
-  }).join("");
-  $("#ikTableBody").innerHTML = rows || `<tr><td colspan="5">Kayıt bulunamadı.</td></tr>`;
+  
+  const folderContainer = $("#ikDailyFolders");
+  const grouped = entries.reduce((acc, e) => {
+    if(!acc[e.tarih]) acc[e.tarih] = [];
+    acc[e.tarih].push(e);
+    return acc;
+  }, {});
+  const sortedDates = Object.keys(grouped).sort((a,b)=>b.localeCompare(a));
+  
+  if(sortedDates.length === 0) {
+    folderContainer.innerHTML = `<p style="color:var(--text-soft);">Kayıt bulunamadı.</p>`;
+  } else {
+    folderContainer.innerHTML = sortedDates.map((date, idx) => {
+      const dayEntries = grouped[date];
+      const rows = dayEntries.map(e => {
+        const u = userById(e.userId);
+        return `<tr>
+          <td>${fullName(u)}</td>
+          <td>${u.departman}</td>
+          <td>${e.baslangic} - ${e.bitis}</td>
+          <td><span class="badge ${badgeClass(e.durum)}">${e.durum}</span></td>
+        </tr>`;
+      }).join("");
+      
+      const isOpen = idx === 0;
+      return `
+      <div class="card" style="margin-bottom:14px; padding:0; overflow:hidden;">
+        <div class="folder-header" style="background:var(--${isOpen?'turq-light':'bg'}); padding:16px 20px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); transition:0.2s;">
+          <div style="font-weight:600; color:var(--navy); font-size:15px; display:flex; align-items:center; gap:8px;">
+            <span style="font-size:18px;">📁</span> ${fmtDate(date)}
+          </div>
+          <div style="font-size:12px; color:var(--text-soft); font-weight:600; background:var(--white); padding:4px 10px; border-radius:20px; border:1px solid var(--border);">
+            ${dayEntries.length} Kayıt
+          </div>
+        </div>
+        <div class="folder-content ${isOpen?'':'hidden'}" style="padding:16px 20px;">
+          <div class="table-wrap">
+            <table class="modern-table">
+              <thead>
+                <tr><th>İsim</th><th>Departman</th><th>Mesai Saati</th><th>Durum</th></tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      `;
+    }).join("");
+    
+    $all(".folder-header", folderContainer).forEach(hdr => {
+      hdr.addEventListener("click", () => {
+        const content = hdr.nextElementSibling;
+        content.classList.toggle("hidden");
+        hdr.style.background = content.classList.contains("hidden") ? "var(--bg)" : "var(--turq-light)";
+      });
+    });
+  }
 
   $("#btnIkPdf").addEventListener("click", ()=>{
     const date = $("#pdfDateIk").value;
@@ -656,45 +757,84 @@ function renderYonOzet(main){
     <div class="main-header">
       <div>
         <h1>Mesai Özeti</h1>
-        <div class="sub">Şirket genelindeki tüm mesai kayıtlarını görüntüleyin ve düzenleyin.</div>
+        <div class="sub">Şirket genelindeki tüm mesai kayıtlarını günlük dosyalar halinde görüntüleyin ve düzenleyin.</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <input type="date" id="pdfDateYon" value="${todayIso}" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);outline:none;font-family:inherit;">
         <button class="btn btn-turq" id="btnYonPdf">📄 PDF İndir</button>
       </div>
     </div>
-    <div class="card">
-      <div class="table-wrap">
-        <table class="modern-table">
-          <thead>
-            <tr><th>İsim</th><th>Departman</th><th>Tarih</th><th>Mesai Saati</th><th>Durum</th><th>İşlem</th></tr>
-          </thead>
-          <tbody id="yonTableBody"></tbody>
-        </table>
-      </div>
-    </div>
+    <div id="yonDailyFolders"></div>
   `;
-  const tbody = $("#yonTableBody");
+  
   function draw(){
-    const rows = entries.slice().sort((a,b)=>b.tarih.localeCompare(a.tarih)).map(e=>{
-      const u = userById(e.userId);
-      return `<tr>
-        <td>${fullName(u)}</td>
-        <td>${u.departman}</td>
-        <td>${fmtDate(e.tarih)}</td>
-        <td>${e.baslangic} - ${e.bitis}</td>
-        <td><span class="badge ${badgeClass(e.durum)}">${e.durum}</span></td>
-        <td><button class="btn btn-sm btn-outline" data-id="${e.id}">Düzenle</button></td>
-      </tr>`;
+    const folderContainer = $("#yonDailyFolders");
+    const grouped = entries.reduce((acc, e) => {
+      if(!acc[e.tarih]) acc[e.tarih] = [];
+      acc[e.tarih].push(e);
+      return acc;
+    }, {});
+    const sortedDates = Object.keys(grouped).sort((a,b)=>b.localeCompare(a));
+    
+    if(sortedDates.length === 0){
+      folderContainer.innerHTML = `<p style="color:var(--text-soft);">Kayıt bulunamadı.</p>`;
+      return;
+    }
+    
+    folderContainer.innerHTML = sortedDates.map((date, idx) => {
+      const dayEntries = grouped[date];
+      const rows = dayEntries.map(e => {
+        const u = userById(e.userId);
+        return `<tr>
+          <td>${fullName(u)}</td>
+          <td>${u.departman}</td>
+          <td>${e.baslangic} - ${e.bitis}</td>
+          <td><span class="badge ${badgeClass(e.durum)}">${e.durum}</span></td>
+          <td><button class="btn btn-sm btn-outline" data-id="${e.id}">Düzenle</button></td>
+        </tr>`;
+      }).join("");
+      
+      const isOpen = idx === 0;
+      return `
+      <div class="card" style="margin-bottom:14px; padding:0; overflow:hidden;">
+        <div class="folder-header" style="background:var(--${isOpen?'turq-light':'bg'}); padding:16px 20px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); transition:0.2s;">
+          <div style="font-weight:600; color:var(--navy); font-size:15px; display:flex; align-items:center; gap:8px;">
+            <span style="font-size:18px;">📁</span> ${fmtDate(date)}
+          </div>
+          <div style="font-size:12px; color:var(--text-soft); font-weight:600; background:var(--white); padding:4px 10px; border-radius:20px; border:1px solid var(--border);">
+            ${dayEntries.length} Kayıt
+          </div>
+        </div>
+        <div class="folder-content ${isOpen?'':'hidden'}" style="padding:16px 20px;">
+          <div class="table-wrap">
+            <table class="modern-table">
+              <thead>
+                <tr><th>İsim</th><th>Departman</th><th>Mesai Saati</th><th>Durum</th><th>İşlem</th></tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      `;
     }).join("");
-    tbody.innerHTML = rows || `<tr><td colspan="6">Kayıt bulunamadı.</td></tr>`;
-    $all("[data-id]", tbody).forEach(btn=>{
+    
+    $all(".folder-header", folderContainer).forEach(hdr => {
+      hdr.addEventListener("click", () => {
+        const content = hdr.nextElementSibling;
+        content.classList.toggle("hidden");
+        hdr.style.background = content.classList.contains("hidden") ? "var(--bg)" : "var(--turq-light)";
+      });
+    });
+
+    $all("[data-id]", folderContainer).forEach(btn=>{
       btn.addEventListener("click", ()=>{
         const entry = entries.find(x=>x.id===btn.dataset.id);
         openEditModal(entry, draw);
       });
     });
   }
+  
   draw();
 
   $("#btnYonPdf").addEventListener("click", ()=>{
@@ -721,6 +861,37 @@ function renderYonKayit(main){
     <div class="timeline-item">
       <div class="timeline-time">${l.time}</div>
       <div class="timeline-text">${l.text}</div>
+    </div>
+  `).join("");
+}
+
+/* ---------------- PERSONEL LİSTESİ (İK & YÖNETİCİ) ---------------- */
+
+function renderPersonelListesi(main){
+  main.innerHTML = `
+    <div class="main-header">
+      <div>
+        <h1>Personel Listesi</h1>
+        <div class="sub">Sisteme kayıtlı tüm personeller ve görevleri.</div>
+      </div>
+    </div>
+    <div class="grid-2" id="personelListGrid"></div>
+  `;
+  
+  const grid = $("#personelListGrid");
+  if(users.length===0){
+    grid.innerHTML = `<p style="color:var(--text-soft);grid-column:1/-1;">Sistemde kayıtlı personel bulunmuyor.</p>`;
+    return;
+  }
+  
+  grid.innerHTML = users.map(u => `
+    <div class="entry-card" style="align-items:center; display:flex; gap:16px; margin-bottom:0; justify-content:flex-start;">
+      <div class="avatar" style="width:48px; height:48px; font-size:16px;">${initials(u)}</div>
+      <div class="entry-left">
+        <div class="entry-date" style="font-size:15px;">${fullName(u)}</div>
+        <div class="entry-time" style="color:var(--turq); font-weight:600; margin-bottom:2px;">${ROLES[u.role].label}</div>
+        <div class="entry-meta">${u.departman} · ${u.gorev}</div>
+      </div>
     </div>
   `).join("");
 }
@@ -811,7 +982,9 @@ function exportDailyPdf(teamEntries, targetDate){
 
 document.addEventListener("DOMContentLoaded", ()=>{
   initAuth();
-  $("#logoutBtn").addEventListener("click", logout);
+  $("#sidebarProfileBtn").addEventListener("click", openProfileModal);
+  $("#sidebarProfileBtn").addEventListener("mouseover", function(){ this.style.background="var(--bg)"; });
+  $("#sidebarProfileBtn").addEventListener("mouseout", function(){ this.style.background="transparent"; });
   document.addEventListener("click", (ev)=>{
     if(!ev.target.closest(".dropdown-container")){
       $all(".dropdown-menu").forEach(m=>m.classList.add("hidden"));
