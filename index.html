@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Mesai Takip Sistemi</title>
+<!-- Google Fonts (Inter) -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ============ GİRİŞ / KAYIT EKRANI ============ -->
+<div id="authScreen">
+  <div class="auth-card">
+    <div class="auth-logo"><img src="unnamed (1).png" alt="Şirket Logosu"></div>
+
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tabLogin">Giriş Yap</button>
+      <button class="auth-tab" id="tabRegister">Kayıt Ol</button>
+    </div>
+
+    <!-- GİRİŞ FORMU -->
+    <form id="loginForm">
+      <div class="form-group">
+        <label>Kullanıcı</label>
+        <select id="loginUser" required></select>
+      </div>
+      <div class="form-group">
+        <label>Şifre</label>
+        <input type="password" placeholder="••••••••" value="demo123">
+      </div>
+      <button type="submit" class="btn btn-primary">Giriş Yap</button>
+      <div class="auth-demo-list">
+        <p>Demo hesaplardan biriyle hızlı giriş:</p>
+        <div id="demoChips"></div>
+      </div>
+    </form>
+
+    <!-- KAYIT FORMU -->
+    <form id="registerForm" class="hidden">
+      <div class="form-group">
+        <label>Ad</label>
+        <input type="text" id="regAd" placeholder="Adınız" required>
+      </div>
+      <div class="form-group">
+        <label>Soyad</label>
+        <input type="text" id="regSoyad" placeholder="Soyadınız" required>
+      </div>
+      <div class="form-group">
+        <label>Görev</label>
+        <input type="text" id="regGorev" placeholder="Örn: Depo Personeli" required>
+      </div>
+      <div class="form-group">
+        <label>Departman</label>
+        <input type="text" id="regDepartman" placeholder="Örn: Operasyon">
+      </div>
+      <div class="form-group">
+        <label>Rol</label>
+        <select id="regRol" required>
+          <option value="">Seçiniz…</option>
+          <option value="calisan">Çalışan</option>
+          <option value="sef">Şef</option>
+          <option value="ik">İnsan Kaynakları</option>
+          <option value="yonetici">Yönetici</option>
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary">Kayıt Ol</button>
+      <p class="auth-hint">Kayıt sonrası giriş ekranından sisteme giriş yapabilirsiniz.</p>
+    </form>
+  </div>
+</div>
+
+<!-- ============ UYGULAMA EKRANI ============ -->
+<div id="appScreen" class="hidden">
+  <aside class="sidebar">
+    <div class="sidebar-logo"><img src="unnamed (1).png" alt="Şirket Logosu"></div>
+
+    <div class="sidebar-user">
+      <div class="avatar" id="sidebarAvatar"></div>
+      <div>
+        <div class="uname" id="sidebarUserName"></div>
+        <div class="urole" id="sidebarUserRole"></div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav" id="sidebarNav"></nav>
+
+    <div class="sidebar-footer">
+      <button class="logout-btn" id="logoutBtn">Çıkış Yap</button>
+    </div>
+  </aside>
+
+  <main class="main" id="mainContent"></main>
+</div>
+
+<div id="toast"></div>
+
+<!-- html2pdf: PDF raporu için -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
