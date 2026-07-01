@@ -26,6 +26,14 @@ let entries = [
   {id:"e4", userId:"u1", tarih:"2026-06-25", baslangic:"19:00", bitis:"21:00", durum:"Reddedildi", photos:[true,true,false]}
 ];
 
+const BUGUN = new Date().toISOString().slice(0,10);
+let shiftRequests = [
+  {id:"sr1", userId:"u1", type:"Gece", saatler:"20:00 - 04:00", tarih:"2026-07-05", durum:"Bekliyor", sure:"1 Hafta", neden:"Kişisel sebepler"},
+  {id:"sr2", userId:"u1", type:"Gündüz", saatler:"08:00 - 17:00", tarih:"2026-07-10", durum:"Onaylandı", sure:"Sürekli", neden:"Sağlık nedenleri"},
+  {id:"sr3", userId:"u1", type:"Gece", saatler:"18:00 - 02:00", tarih: BUGUN, durum:"Onaylandı", sure:"1 Ay", neden:"Proje mesaisi (Demo)"},
+  {id:"sr4", userId:"u2", type:"Gündüz", saatler:"08:00 - 16:00", tarih: BUGUN, durum:"Onaylandı", sure:"Sürekli", neden:"Vardiya rotasyonu (Demo)"}
+];
+
 let logs = [
   {time:"30.06.2026 21:14", text:"<b>Merve Demir (İK)</b>, Ahmet Yılmaz'ın 1 Temmuz mesaisini sisteme kaydetti."},
   {time:"30.06.2026 18:02", text:"<b>Can Öztürk (Şef)</b>, 30 Haziran tarihli kendi mesaisini onayladı."},
@@ -45,6 +53,15 @@ function $(sel, ctx){ return (ctx||document).querySelector(sel); }
 function $all(sel, ctx){ return Array.from((ctx||document).querySelectorAll(sel)); }
 function fullName(u){ return u ? (u.ad + " " + u.soyad) : "—"; }
 function initials(u){ return u ? (u.ad[0]+u.soyad[0]).toUpperCase() : "?"; }
+function calcHours(baslangic, bitis) {
+  const [h1, m1] = baslangic.split(":").map(Number);
+  const [h2, m2] = bitis.split(":").map(Number);
+  let d = new Date();
+  let d1 = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h1, m1);
+  let d2 = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h2, m2);
+  if(d2 < d1) d2.setDate(d2.getDate() + 1);
+  return (d2 - d1) / (1000 * 60 * 60);
+}
 function fmtDate(iso){
   const [y,m,d] = iso.split("-");
   const aylar=["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
@@ -214,18 +231,24 @@ function openProfileModal(){
 
 const NAV_BY_ROLE = {
   calisan: [
-    {key:"calisan-mesai", label:"Mesailerim", icon:"📅"}
+    {key:"calisan-mesai", label:"Mesailerim", icon:"📅"},
+    {key:"calisan-vardiya", label:"Vardiya Taleplerim", icon:"🔄"}
   ],
   sef: [
     {key:"sef-talepler", label:"Takım Talepleri", icon:"📋"},
+    {key:"sef-vardiya", label:"Vardiya Talepleri", icon:"🔄"},
     {key:"sef-mesai", label:"Mesailerim", icon:"📅"}
   ],
   ik: [
     {key:"ik-ozet", label:"Şirket Özeti", icon:"🗂️"},
+    {key:"ik-mesai-ucret", label:"Mesai Ücretleri", icon:"💰"},
+    {key:"vardiya-listesi", label:"Vardiya Listesi", icon:"🔄"},
     {key:"ik-personel", label:"Personel Listesi", icon:"👥"}
   ],
   yonetici: [
     {key:"yon-ozet", label:"Mesai Özeti", icon:"🗂️"},
+    {key:"yon-mesai-ucret", label:"Mesai Ücretleri", icon:"💰"},
+    {key:"vardiya-listesi", label:"Vardiya Listesi", icon:"🔄"},
     {key:"yon-kayit", label:"Sistem Kayıtları", icon:"🕒"},
     {key:"yon-personel", label:"Personel Listesi", icon:"👥"}
   ]
@@ -263,10 +286,14 @@ function renderSection(key){
   const main = $("#mainContent");
   main.innerHTML = "";
   if(key==="calisan-mesai") renderCalisanMesai(main, currentUser);
+  else if(key==="calisan-vardiya") renderCalisanVardiya(main, currentUser);
   else if(key==="sef-talepler") renderSefTalepler(main);
+  else if(key==="sef-vardiya") renderSefVardiya(main);
   else if(key==="sef-mesai") renderCalisanMesai(main, currentUser, true);
   else if(key==="ik-ozet") renderIkOzet(main);
   else if(key==="yon-ozet") renderYonOzet(main);
+  else if(key==="ik-mesai-ucret" || key==="yon-mesai-ucret") renderMesaiUcretleri(main);
+  else if(key==="vardiya-listesi") renderVardiyaListesi(main);
   else if(key==="yon-kayit") renderYonKayit(main);
   else if(key==="ik-personel" || key==="yon-personel") renderPersonelListesi(main);
 }
@@ -975,6 +1002,377 @@ function exportDailyPdf(teamEntries, targetDate){
   }).catch(err=>{
     console.error("PDF oluşturulurken hata:", err);
     toast("PDF indirilirken bir hata oluştu.");
+  });
+}
+
+/* ---------------- YENİ: VARDİYA TALEPLERİ (ÇALIŞAN) ---------------- */
+function renderCalisanVardiya(main, user){
+  main.innerHTML = `
+    <div class="main-header">
+      <div>
+        <h1>Vardiya Taleplerim</h1>
+        <div class="sub">Gece/Gündüz seans değişikliği veya özel saatli vardiya taleplerinizi oluşturun.</div>
+      </div>
+      <button class="btn btn-turq" id="btnYeniVardiya">+ Yeni Talep</button>
+    </div>
+    <div class="card">
+      <h3>Geçmiş Vardiya Taleplerim</h3>
+      <div id="myShiftRequests"></div>
+    </div>
+  `;
+  renderMyShiftRequests($("#myShiftRequests"), user.id);
+  $("#btnYeniVardiya").addEventListener("click", ()=>openVardiyaModal(null));
+}
+
+function renderMyShiftRequests(container, userId){
+  const mine = shiftRequests.filter(s=>s.userId===userId).sort((a,b)=>b.tarih.localeCompare(a.tarih));
+  if(mine.length===0){ container.innerHTML = `<p style="color:var(--text-soft);font-size:13.5px;">Henüz vardiya talebiniz yok.</p>`; return; }
+  container.innerHTML = mine.map(s=>`
+    <div class="entry-card">
+      <div class="entry-left">
+        <div class="entry-date">${fmtDate(s.tarih)} — ${s.type} Vardiyası</div>
+        <div class="entry-time">İstenen Saatler: ${s.saatler} | Süre: ${s.sure}</div>
+        <div class="entry-meta" style="margin-top:4px;">Neden: ${s.neden}</div>
+      </div>
+      <span class="badge ${badgeClass(s.durum)}">${s.durum}</span>
+    </div>
+  `).join("");
+}
+
+function openVardiyaModal(){
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal-box">
+      <button class="modal-close" id="closeVardiyaModal">✕</button>
+      <h3>Yeni Vardiya Talebi</h3>
+      <form id="vardiyaForm">
+        <div class="form-group">
+          <label>Tarih</label>
+          <input type="date" id="vardiyaTarih" required>
+        </div>
+        <div class="form-group">
+          <label>Vardiya Tipi</label>
+          <select id="vardiyaTipi">
+            <option value="Gece">Gece (Akşam)</option>
+            <option value="Gündüz">Gündüz (Sabah)</option>
+            <option value="Özel">Özel Saatler</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>İstenilen Saatler (Örn: 13:00 - 00:00)</label>
+          <input type="text" id="vardiyaSaatler" placeholder="Gece veya Gündüz ise boş bırakabilirsiniz">
+        </div>
+        <div class="form-group">
+          <label>Süre</label>
+          <input type="text" id="vardiyaSure" placeholder="Örn: 1 Hafta, 3 Gün, Belirsiz..." required>
+        </div>
+        <div class="form-group">
+          <label>Neden</label>
+          <input type="text" id="vardiyaNeden" placeholder="Talebinizin nedeni..." required>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Talep Oluştur</button>
+      </form>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  $("#closeVardiyaModal", overlay).addEventListener("click", ()=>overlay.remove());
+  overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
+
+  $("#vardiyaForm", overlay).addEventListener("submit", e=>{
+    e.preventDefault();
+    const tarih = $("#vardiyaTarih").value;
+    const type = $("#vardiyaTipi").value;
+    const sure = $("#vardiyaSure").value;
+    const neden = $("#vardiyaNeden").value || "Belirtilmedi";
+    const saatler = $("#vardiyaSaatler").value || (type==="Gece"?"20:00 - 04:00":"08:00 - 17:00");
+    if(!tarih) { toast("Lütfen tarih seçin."); return; }
+    const newReq = {
+      id:"sr"+Math.floor(Math.random()*10000),
+      userId: currentUser.id,
+      type, saatler, tarih, durum: "Bekliyor", sure, neden
+    };
+    shiftRequests.push(newReq);
+    addLog(`<b>${fullName(currentUser)}</b> ${fmtDate(tarih)} için yeni vardiya talebi oluşturdu.`);
+    toast("Vardiya talebi oluşturuldu.");
+    overlay.remove();
+    renderSection("calisan-vardiya");
+  });
+}
+
+/* ---------------- YENİ: VARDİYA TALEPLERİ (ŞEF) ---------------- */
+function renderSefVardiya(main){
+  const teamReqs = shiftRequests.filter(s=>{
+    const u = userById(s.userId);
+    return u && u.role==="calisan";
+  }).sort((a,b)=>b.tarih.localeCompare(a.tarih));
+
+  main.innerHTML = `
+    <div class="main-header">
+      <div>
+        <h1>Takım Vardiya Talepleri</h1>
+        <div class="sub">Ekibinizin vardiya (seans) değişiklik taleplerini yönetin.</div>
+      </div>
+    </div>
+    <div class="card" id="talepListVardiya"></div>
+  `;
+
+  const listEl = $("#talepListVardiya");
+  if(teamReqs.length===0){
+    listEl.innerHTML = `<p style="color:var(--text-soft);">Bekleyen talep bulunmuyor.</p>`;
+  } else {
+    listEl.innerHTML = teamReqs.map(s=>{
+      const u = userById(s.userId);
+      return `
+      <div class="entry-card">
+        <div class="entry-left">
+          <div class="entry-date">${fullName(u)} — ${fmtDate(s.tarih)}</div>
+          <div class="entry-time">${s.type} Vardiyası (${s.saatler}) | Süre: ${s.sure}</div>
+          <div class="entry-meta" style="margin-top:4px;">Neden: ${s.neden}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <span class="badge ${badgeClass(s.durum)}">${s.durum}</span>
+          ${s.durum==="Bekliyor" ? `
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-sm btn-green" data-vact="onayla" data-id="${s.id}">Onayla</button>
+            <button class="btn btn-sm btn-red" data-vact="reddet" data-id="${s.id}">Reddet</button>
+          </div>
+          `:''}
+        </div>
+      </div>`;
+    }).join("");
+  }
+
+  $all("[data-vact]", listEl).forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const id = btn.dataset.id;
+      const s = shiftRequests.find(x=>x.id===id);
+      const u = userById(s.userId);
+      if(btn.dataset.vact==="onayla"){
+        s.durum = "Onaylandı";
+        addLog(`<b>${fullName(currentUser)} (Şef)</b>, ${fullName(u)}'ın vardiya talebini onayladı.`);
+        toast("Talep onaylandı.");
+      } else {
+        s.durum = "Reddedildi";
+        addLog(`<b>${fullName(currentUser)} (Şef)</b>, ${fullName(u)}'ın vardiya talebini reddetti.`);
+        toast("Talep reddedildi.");
+      }
+      renderSefVardiya(main);
+    });
+  });
+}
+
+/* ---------------- YENİ: VARDİYA LİSTESİ (İK / YÖNETİCİ) ---------------- */
+function renderVardiyaListesi(main){
+  const todayIso = new Date().toISOString().slice(0,10);
+  main.innerHTML = `
+    <div class="main-header">
+      <div>
+        <h1>Vardiya Listesi (Gece/Gündüz)</h1>
+        <div class="sub">Vardiyası değişen veya onaylanan çalışanların listesi.</div>
+      </div>
+    </div>
+    <div class="card">
+      <div style="margin-bottom:16px;display:flex;gap:8px;align-items:center;">
+        <input type="date" id="pdfDateVardiya" value="${todayIso}" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);outline:none;font-family:inherit;">
+        <button class="btn btn-turq" id="btnVardiyaPdf">📄 Listeyi İndir (PDF)</button>
+      </div>
+      <div class="table-wrap" id="vardiyaTableWrap"></div>
+    </div>
+  `;
+
+  function drawTable(){
+    const date = $("#pdfDateVardiya").value;
+    const filtered = shiftRequests.filter(s=>s.tarih===date && s.durum==="Onaylandı");
+    
+    if(filtered.length===0){
+      $("#vardiyaTableWrap").innerHTML = `<p style="color:var(--text-soft);">Bu tarihte onaylanmış bir vardiya değişikliği yok.</p>`;
+      return;
+    }
+
+    const rows = filtered.map(s=>{
+      const u = userById(s.userId);
+      return `<tr>
+        <td>${fullName(u)}</td>
+        <td>${u.departman}</td>
+        <td><span class="badge ${s.type==='Gece'?'badge-pending':'badge-approved'}">${s.type}</span></td>
+        <td>${s.saatler}</td>
+        <td>${s.sure}</td>
+      </tr>`;
+    }).join("");
+
+    $("#vardiyaTableWrap").innerHTML = `
+      <table class="modern-table">
+        <thead>
+          <tr><th>İsim</th><th>Departman</th><th>Vardiya</th><th>Saatler</th><th>Süre</th></tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  }
+  
+  drawTable();
+  $("#pdfDateVardiya").addEventListener("change", drawTable);
+
+  $("#btnVardiyaPdf").addEventListener("click", ()=>{
+    const date = $("#pdfDateVardiya").value;
+    const filtered = shiftRequests.filter(s=>s.tarih===date && s.durum==="Onaylandı");
+    if(filtered.length===0){ toast("Bu tarihte indirilecek liste bulunamadı."); return; }
+    exportVardiyaPdf(filtered, date);
+  });
+}
+
+function exportVardiyaPdf(teamReqs, targetDate){
+  toast("PDF hazırlanıyor, lütfen bekleyin...");
+  
+  const printEl = document.createElement("div");
+  printEl.style.padding = "30px 40px";
+  printEl.style.fontFamily = "'Inter', system-ui, sans-serif";
+  printEl.style.color = "#1f2a37";
+  printEl.style.background = "#fff";
+  
+  const rows = teamReqs.map(s=>{
+    const u = userById(s.userId);
+    return `<tr>
+      <td style="padding:14px 16px; border-bottom:1px solid #e5e7eb; color:#111827; font-weight:500;">${fullName(u)}</td>
+      <td style="padding:14px 16px; border-bottom:1px solid #e5e7eb; color:#4b5563;">${u.departman}</td>
+      <td style="padding:14px 16px; border-bottom:1px solid #e5e7eb; color:#4b5563; font-weight:600;">${s.type}</td>
+      <td style="padding:14px 16px; border-bottom:1px solid #e5e7eb; color:#4b5563;">${s.saatler}</td>
+      <td style="padding:14px 16px; border-bottom:1px solid #e5e7eb; color:#4b5563;">${s.sure}</td>
+    </tr>`;
+  }).join("");
+
+  printEl.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:30px; border-bottom:2px solid #e5e7eb; padding-bottom:20px;">
+      <div>
+        <h1 style="margin:0; font-size:26px; color:#111827; letter-spacing:-0.5px;">Günlük Vardiya Listesi</h1>
+        <p style="margin:6px 0 0 0; color:#6b7280; font-size:14px;">Rapor Tarihi: <strong style="color:#374151;">${fmtDate(targetDate)}</strong></p>
+        <p style="margin:4px 0 0 0; color:#6b7280; font-size:14px;">İndiren: ${fullName(currentUser)} (${ROLES[currentUser.role].label})</p>
+      </div>
+      <img src="unnamed (1).png" alt="Logo" style="height:55px; object-fit:contain;">
+    </div>
+    
+    <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13.5px; margin-bottom:40px;">
+      <thead>
+        <tr style="background-color:#f8fafc;">
+          <th style="padding:14px 16px; border-bottom:2px solid #cbd5e1; color:#334155; font-weight:600;">Çalışan</th>
+          <th style="padding:14px 16px; border-bottom:2px solid #cbd5e1; color:#334155; font-weight:600;">Departman</th>
+          <th style="padding:14px 16px; border-bottom:2px solid #cbd5e1; color:#334155; font-weight:600;">Vardiya</th>
+          <th style="padding:14px 16px; border-bottom:2px solid #cbd5e1; color:#334155; font-weight:600;">Saatler</th>
+          <th style="padding:14px 16px; border-bottom:2px solid #cbd5e1; color:#334155; font-weight:600;">Süre</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+      </tbody>
+    </table>
+    
+    <div style="display:flex; justify-content:space-between; margin-top:80px; text-align:center; font-size:14px; color:#4b5563;">
+      <div style="width:200px;">
+        <div style="border-bottom:1px solid #9ca3af; height:40px; margin-bottom:8px;"></div>
+        <strong style="color:#111827;">Onaylayan İmza</strong>
+        <div style="font-size:12px; margin-top:4px;">Yetkili / Şef</div>
+      </div>
+      <div style="width:200px;">
+        <div style="border-bottom:1px solid #9ca3af; height:40px; margin-bottom:8px;"></div>
+        <strong style="color:#111827;">İnsan Kaynakları</strong>
+        <div style="font-size:12px; margin-top:4px;">İK Departmanı</div>
+      </div>
+    </div>
+    
+    <div style="margin-top:60px; font-size:11px; color:#9ca3af; text-align:center;">
+      Bu belge Mesai Takip Sistemi tarafından <strong>${new Date().toLocaleDateString('tr-TR')}</strong> tarihinde otomatik olarak oluşturulmuştur.
+    </div>
+  `;
+
+  const opt = {
+    margin:       [5, 0, 10, 0], // Top, Left, Bottom, Right
+    filename:     `vardiya-listesi-${targetDate}.pdf`,
+    image:        { type: 'jpeg', quality: 0.98 },
+    html2canvas:  { scale: 2, useCORS: true },
+    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
+
+  html2pdf().set(opt).from(printEl).save().then(()=>{
+    addLog(`<b>${fullName(currentUser)} (${ROLES[currentUser.role].label})</b> ${fmtDate(targetDate)} tarihli Vardiya PDF raporunu indirdi.`);
+    toast("Vardiya PDF raporu başarıyla indirildi.");
+  }).catch(err=>{
+    console.error("PDF oluşturulurken hata:", err);
+    toast("PDF indirilirken bir hata oluştu.");
+  });
+}
+
+/* ---------------- YENİ: MESAİ ÜCRETLERİ (İK / YÖNETİCİ) ---------------- */
+let hourlyRate = 100;
+
+function renderMesaiUcretleri(main){
+  main.innerHTML = `
+    <div class="main-header">
+      <div>
+        <h1>Mesai Ücreti Hesaplama</h1>
+        <div class="sub">Çalışanların onaylanmış mesai saatlerini sıralayın ve ücretlerini hesaplayın.</div>
+      </div>
+    </div>
+    <div class="card" style="display:flex;align-items:center;gap:16px;background:var(--turq-light);border:none;">
+      <div>
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:6px;">1 Saatlik Mesai Ücreti (TL)</label>
+        <input type="number" id="hourlyRateInput" value="${hourlyRate}" style="padding:10px;border-radius:8px;border:1px solid var(--turq);width:120px;font-weight:700;">
+      </div>
+      <button class="btn btn-primary" id="btnUpdateRate" style="align-self:flex-end;">Uygula</button>
+    </div>
+    <div class="card">
+      <div class="table-wrap" id="ucretTableWrap"></div>
+    </div>
+  `;
+
+  function drawTable(){
+    const userTotals = {};
+    users.forEach(u => userTotals[u.id] = { user: u, totalHours: 0 });
+
+    entries.forEach(e => {
+      if(e.durum === "Onaylandı"){
+        const h = calcHours(e.baslangic, e.bitis);
+        if(userTotals[e.userId]) userTotals[e.userId].totalHours += h;
+      }
+    });
+
+    const sorted = Object.values(userTotals)
+      .filter(u => u.totalHours > 0)
+      .sort((a,b) => b.totalHours - a.totalHours);
+
+    if(sorted.length===0){
+      $("#ucretTableWrap").innerHTML = `<p style="color:var(--text-soft);">Onaylanmış mesai bulunamadı.</p>`;
+      return;
+    }
+
+    const rows = sorted.map((item, idx)=>{
+      const rankBadge = idx < 3 ? `<span class="rank-badge rank-${idx+1}">${idx+1}.</span>` : `<span class="rank-badge">${idx+1}.</span>`;
+      return `<tr>
+        <td style="width:50px;text-align:center;">${rankBadge}</td>
+        <td>${fullName(item.user)}</td>
+        <td>${item.user.departman}</td>
+        <td style="font-weight:600;">${item.totalHours.toFixed(2)} Saat</td>
+        <td style="font-weight:700;color:var(--navy);">${(item.totalHours * hourlyRate).toFixed(2)} TL</td>
+      </tr>`;
+    }).join("");
+
+    $("#ucretTableWrap").innerHTML = `
+      <table class="modern-table">
+        <thead>
+          <tr><th style="text-align:center;">Sıra</th><th>İsim</th><th>Departman</th><th>Toplam Mesai</th><th>Toplam Ücret</th></tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  }
+
+  drawTable();
+
+  $("#btnUpdateRate").addEventListener("click", ()=>{
+    hourlyRate = parseFloat($("#hourlyRateInput").value) || 0;
+    toast(`Saatlik ücret ${hourlyRate} TL olarak güncellendi.`);
+    drawTable();
   });
 }
 

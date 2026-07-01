@@ -336,11 +336,17 @@ input,select{font-family:inherit;}
   flex-wrap:wrap;
   box-shadow: 0 4px 12px rgba(15,23,42,0.01);
   transition: all .25s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  z-index: 1;
 }
 .entry-card:hover {
   border-color: #cbd5e1;
   box-shadow: 0 8px 24px rgba(15,23,42,0.05);
   transform: translateY(-2px);
+  z-index: 10;
+}
+.entry-card:has(.dropdown-menu:not(.hidden)) {
+  z-index: 50;
 }
 .entry-left{display:flex;flex-direction:column;gap:5px;}
 .entry-date{font-weight:600;font-size:14.5px;color:var(--text);}
@@ -356,6 +362,22 @@ input,select{font-family:inherit;}
 .badge-pending{background:var(--amber-bg);color:var(--amber);}
 .badge-approved{background:var(--green-bg);color:var(--green);}
 .badge-rejected{background:var(--red-bg);color:var(--red);}
+
+/* Rank Badges */
+.rank-badge{
+  display:inline-block;
+  width:26px;height:26px;
+  line-height:26px;
+  border-radius:50%;
+  background:var(--bg);
+  color:var(--text-soft);
+  font-weight:700;
+  font-size:12px;
+  text-align:center;
+}
+.rank-1{background:#ffd700;color:#fff;box-shadow:0 2px 6px rgba(255,215,0,0.4);}
+.rank-2{background:#c0c0c0;color:#fff;box-shadow:0 2px 6px rgba(192,192,192,0.4);}
+.rank-3{background:#cd7f32;color:#fff;box-shadow:0 2px 6px rgba(205,127,50,0.4);}
 
 /* Dropdown Menu */
 .dropdown-container {
@@ -399,9 +421,14 @@ input,select{font-family:inherit;}
 .text-turq { color: var(--navy); }
 
 /* Table */
-.table-wrap{overflow-x:auto;}
+.table-wrap{
+  overflow-x:auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+}
 table.modern-table{
   width:100%;
+  min-width: 500px;
   border-collapse:collapse;
   font-size:13.5px;
 }
@@ -418,7 +445,7 @@ table.modern-table{
 .modern-table tbody td{
   padding:12px 14px;
   border-bottom:1px solid var(--border);
-  white-space:nowrap;
+  word-break: break-word;
 }
 .modern-table tbody tr:hover{background:var(--turq-light);}
 
